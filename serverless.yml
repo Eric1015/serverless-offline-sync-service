@@ -1,0 +1,94 @@
+service: serverless-offline-sync-service
+
+custom:
+  stage: "${opt:stage, self:provider.stage}"
+  syncLogsTableName: "sync-logs-${opt:stage, self:provider.stage}"
+  defaultRegion: ap-northeast-1
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  profile: serverless-offline-sync-service-user
+  environment:
+    NODE_ENV: ${self:custom.stage}
+    SYNC_LOGS_TABLE: ${self:custom.syncLogsTable}
+    DEFAULT_REGION: ${self:custom.defaultRegion}
+
+iamRoleStatements:
+  - Effect: Allow
+    Action:
+      - dynamodb:Query
+      - dynamodb:Scan
+      - dynamodb:GetItem
+      - dynamodb:PutItem
+      - dynamodb:BatchWriteItem
+      - dynamodb:UpdateItem
+      - dynamodb:DeleteItem
+    Resource:
+      - { "Fn::GetAtt": ["SyncLogsTable", "Arn" ] }
+
+plugins:
+  - serverless-plugin-typescript 
+  - serverless-offline
+
+package:
+  exclude:
+    - config/.env.stg
+    - config/.env.pro
+  include:
+    - config/.env.dev
+
+functions:
+  create:
+    handler: app/handler.create
+    events:
+      - http:
+          path: books
+          method: post
+  update:
+    handler: app/handler.update
+    events:
+      - http:
+          path: books/{id}
+          method: put
+  find:
+    handler: app/handler.find
+    events:
+      - http:
+          path: books
+          method: get
+  findOne:
+    handler: app/handler.findOne
+    events:
+      - http:
+          path: books/{id}
+          method: get
+
+  deleteOne:
+    handler: app/handler.deleteOne
+    events:
+      - http:
+          path: books/{id}
+          method: delete
+
+resources:
+  Resources:
+    SyncLogsTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties: 
+        AttributeDefinitions:
+          - 
+            AttributeName: modelKeysAction
+            AttributeType: S
+          -
+            AttributeName: logCreatedAt
+            AttributeType: N
+        KeySchema:
+          -
+            AttributeName: modelKeysAction
+            KeyType: HASH
+          -
+            AttributeName: logCreatedAt
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:custom.syncLogsTableName}
